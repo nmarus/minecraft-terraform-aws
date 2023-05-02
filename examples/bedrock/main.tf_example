@@ -1,0 +1,52 @@
+provider "aws" {
+  region = "us-east-1"
+}
+
+terraform {
+  required_version = ">= 0.15.4"
+}
+
+locals {
+  name = "minecraft"
+  domain = "example.com"
+}
+
+module "minecraft" {
+  source = "../../minecraft-bedrock"
+
+  name_prefix        = local.name
+  vpc_cidr           = "10.33.0.0/24"
+  availability_zones = [
+    "us-east-1a",
+    "us-east-1b",
+  ]
+  default_tags = {
+    url = "${local.name}.${local.domain}"
+  }
+}
+
+data "aws_route53_zone" "minecraft" {
+  name = local.domain
+}
+
+resource "aws_route53_record" "minecraft" {
+  name    = local.name
+  zone_id = data.aws_route53_zone.minecraft.zone_id
+  type    = "A"
+  records = [module.minecraft.public_ip]
+  ttl     = 60
+}
+
+resource "local_file" "aws_key_pair_pem" {
+  content         = module.minecraft.tls_private_key.private_key_pem
+  filename        = "${path.module}/${module.minecraft.name}.pem"
+  file_permission = "0400"
+}
+
+output "public_ip" {
+  value = module.minecraft.public_ip
+}
+
+output "public_dns" {
+  value = module.minecraft.public_dns
+}
